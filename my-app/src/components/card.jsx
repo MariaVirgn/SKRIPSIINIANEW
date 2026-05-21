@@ -21,9 +21,8 @@ export default function PerfumeCard({
   // STATE LIKE & RATING
   // =========================
   const [liked, setLiked] = useState(false);
-  const [rating, setRating] = useState(""); // State untuk menyimpan pilihan dropdown
+  const [rating, setRating] = useState("");
 
-  // Opsional: Ambil nilai rating yang sudah ada sebelumnya dari backend saat card dimuat
   useEffect(() => {
     if (item?.user_rating) {
       setRating(item.user_rating);
@@ -31,7 +30,7 @@ export default function PerfumeCard({
   }, [item]);
 
   // =========================
-  // CEK APAKAH SUDAH DI WISHLIST
+  // CEK WISHLIST
   // =========================
   useEffect(() => {
     const checkWishlist = async () => {
@@ -41,15 +40,12 @@ export default function PerfumeCard({
 
         const result = await apiFetch("/api/wishlist", {
           method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
 
         if (Array.isArray(result)) {
           const isLiked = result.some(
-            (wishlistItem) =>
-              Number(wishlistItem.perfume_id) === Number(item.id)
+            (wishlistItem) => Number(wishlistItem.perfume_id) === Number(item.id)
           );
           setLiked(isLiked);
         }
@@ -64,7 +60,7 @@ export default function PerfumeCard({
   }, [item, canModify]);
 
   // =========================
-  // FUNCTION HANDLE UPDATE RATING (UNTUK NDCG)
+  // HANDLE UPDATE RATING
   // =========================
   const handleRatingChange = async (e) => {
     const selectedValue = e.target.value;
@@ -85,7 +81,6 @@ export default function PerfumeCard({
         return;
       }
 
-      // Kirim data rating ke backend untuk memicu kalkulasi ulang NDCG/AP
       await apiFetch(`/api/evaluasi/rating`, {
         method: "POST",
         headers: {
@@ -96,11 +91,10 @@ export default function PerfumeCard({
           perfume_id: item.id,
           anchor_id: anchor_id, 
           rating_text: selectedValue,
-          rating_score: Number(selectedValue) // Mengirimkan nilai angka konversi (0-4) ke backend
+          rating_score: Number(selectedValue)
         }),
       });
 
-      // Notifikasi sukses tanpa mengganggu user (Toast)
       const Toast = Swal.mixin({
         toast: true,
         position: 'top-end',
@@ -126,12 +120,11 @@ export default function PerfumeCard({
   };
 
   // =========================
-  // FUNCTION ADD / REMOVE WISHLIST
+  // ADD / REMOVE WISHLIST
   // =========================
   const handleAddToWishlist = async (perfume) => {
     try {
       const token = localStorage.getItem("token");
-
       if (!token) {
         Swal.fire({
           icon: "warning",
@@ -145,33 +138,22 @@ export default function PerfumeCard({
       if (liked) {
         const wishlist = await apiFetch("/api/wishlist", {
           method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
 
         const selectedItem = wishlist.find(
-          (wishlistItem) =>
-            Number(wishlistItem.perfume_id) === Number(perfume.id)
+          (wishlistItem) => Number(wishlistItem.perfume_id) === Number(perfume.id)
         );
 
         if (selectedItem) {
-          await apiFetch(
-            `/api/wishlist/${selectedItem.id}`,
-            {
-              method: "DELETE",
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
-
+          await apiFetch(`/api/wishlist/${selectedItem.id}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
           setLiked(false);
-
           Swal.fire({
             icon: "success",
             title: "Wishlist dihapus",
-            text: "Parfum berhasil dihapus dari wishlist",
             timer: 1500,
             showConfirmButton: false,
           });
@@ -200,7 +182,6 @@ export default function PerfumeCard({
       });
 
       setLiked(true);
-
       Swal.fire({
         icon: "success",
         title: "Berhasil!",
@@ -211,23 +192,12 @@ export default function PerfumeCard({
 
     } catch (err) {
       console.log(err);
-      Swal.fire({
-        icon: "error",
-        title: "Gagal",
-        text: "Gagal memperbarui wishlist",
-        confirmButtonColor: "#dc2626",
-      });
     }
   };
 
-  // =========================
-  // FORMAT RUPIAH
-  // =========================
   const formatRupiah = (value) => {
     const amount = Number(value);
-    if (Number.isNaN(amount)) {
-      return "Rp -";
-    }
+    if (Number.isNaN(amount)) return "Rp -";
     return new Intl.NumberFormat("id-ID", {
       style: "currency",
       currency: "IDR",
@@ -238,193 +208,148 @@ export default function PerfumeCard({
   return (
     <div
       key={index}
-      className={
-        "min-w-[200px] min-h-[820px] group relative bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 justify-between h-full flex flex-col ".concat(
-          item.similarity ? "w-[400px]" : "w-full"
-        )
-      }
+      className={`group relative bg-white border border-gray-100 rounded-xl p-4 shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col justify-between h-full ${
+        item.similarity ? "w-[340px]" : "w-full"
+      }`}
     >
-      {/* GAMBAR PARFUM */}
-      <div className="relative pb-2">
-        <img
-          src={`http://localhost:5000/api/uploads/${item.image_file}`}
-          alt=""
-          className="overflow-hidden rounded-md object-cover object-center h-[300px] w-full"
-        />
-      </div>
-
-      {/* PERSENTASE MATCH */}
-      {item && item.similarity && (
-        <div className="absolute top-4 right-4">
-          <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 px-3 py-1 rounded-full text-xs font-bold">
+      {/* TINGKAT MATCH */}
+      {item?.similarity && (
+        <div className="absolute top-3 right-3 z-10">
+          <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
             {item.similarity}% Match
           </span>
         </div>
       )}
 
-      {/* DETAIL PARFUM */}
-      <div className="flex flex-col flex-1">
-        {/* BRAND */}
-        <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400 font-bold mb-1">
-          {item.brand}
-        </p>
+      {/* HEADER: GAMBAR & IDENTITAS */}
+      <div className="flex flex-col gap-2">
+        {/* GAMBAR */}
+        <div className="relative overflow-hidden rounded-lg bg-gray-50">
+          <img
+            src={`http://localhost:5000/api/uploads/${item.image_file}`}
+            alt=""
+            className="object-cover object-center h-[200px] w-full group-hover:scale-105 transition-transform duration-300"
+          />
+        </div>
 
-        {/* NAMA PARFUM */}
-        <h2 className="text-2xl font-serif font-bold text-gray-800 mb-4 group-hover:text-blue-600 transition-colors leading-tight min-h-[56px]">
-          {item.perfume}
-        </h2>
-
-        {/* INFO SINGKAT GRID */}
-        <div className="grid grid-cols-2 gap-y-4 gap-x-4 border-t border-gray-50 pt-4 text-xs">
-          
-          {/* ACCORD */}
-          <div className="flex flex-col overflow-hidden col-span-2">
-            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter mb-0.5">
-              Accord
-            </span>
-            <span className="text-gray-700 font-medium leading-relaxed line-clamp-2 break-words">
-              {item.Accord || "-"}
-            </span>
-          </div>
-
-          {/* MOOD */}
-          <div className="flex flex-col overflow-hidden">
-            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter mb-0.5">
-              Mood
-            </span>
-            <span className="text-gray-700 font-medium break-words line-clamp-2">
-              {item.Mood || "-"}
-            </span>
-          </div>
-
-          {/* GENDER */}
-          <div className="flex flex-col overflow-hidden">
-            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter mb-0.5">
-              Gender
-            </span>
-            <span className="text-gray-700 font-medium break-words capitalize">
-              {item.gender || "-"}
-            </span>
-          </div>
-
-          {/* SITUATION */}
-          <div className="flex flex-col overflow-hidden">
-            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter mb-0.5">
-              Situation
-            </span>
-            <span className="text-gray-700 font-medium break-words line-clamp-2">
-              {item.situation || "-"}
-            </span>
-          </div>
-
-          {/* OCCASION */}
-          <div className="flex flex-col overflow-hidden">
-            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter mb-0.5">
-              Occasion
-            </span>
-            <span className="text-gray-700 font-medium break-words line-clamp-2">
-              {item.Occasion || "-"}
-            </span>
-          </div>
-
-          {/* NOTES (TOP, MID, BASE) */}
-          <div className="flex flex-col overflow-hidden col-span-2 border-t border-dashed border-gray-100 pt-2 mt-1">
-            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter mb-1">
-              Fragrance Notes
-            </span>
-            <div className="grid grid-cols-3 gap-1 bg-gray-50 p-2 rounded-lg text-[11px]">
-              <div>
-                <span className="block text-[9px] text-gray-400 font-bold uppercase">Top</span>
-                <span className="text-gray-700 font-medium line-clamp-2 break-words">{item.top_notes || item.top || "-"}</span>
-              </div>
-              <div className="border-x border-gray-200 px-1.5">
-                <span className="block text-[9px] text-gray-400 font-bold uppercase">Mid</span>
-                <span className="text-gray-700 font-medium line-clamp-2 break-words">{item.mid_notes || item.middle || "-"}</span>
-              </div>
-              <div className="pl-0.5">
-                <span className="block text-[9px] text-gray-400 font-bold uppercase">Base</span>
-                <span className="text-gray-700 font-medium line-clamp-2 break-words">{item.base_notes || item.base || "-"}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* ========================================================
-              DROPDOWN EVALUASI KESESUAIAN (UNTUK MENGHITUNG NDCG)
-             ======================================================== */}
-          {!canModify && (
-            <div className="flex flex-col col-span-2 border-t border-gray-100 pt-3 mt-1">
-              <label className="text-[10px] text-blue-600 uppercase font-bold tracking-wider mb-1">
-                Tingkat Kesesuaian Rekomendasi
-              </label>
-              <select
-                value={rating}
-                onChange={handleRatingChange}
-                className="w-full bg-blue-50/50 border border-blue-100 rounded-xl p-2.5 text-xs text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
-              >
-                <option value="">-- Pilih Kesesuaian --</option>
-                <option value="0">Sangat Tidak Sesuai</option>
-                <option value="1">Tidak Sesuai</option>
-                <option value="2">Netral</option>
-                <option value="3">Sesuai</option>
-                <option value="4">Sangat Sesuai</option>
-              </select>
-            </div>
-          )}
-
+        {/* BRAND & NAMA */}
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-gray-400 font-bold">
+            {item.brand}
+          </p>
+          <h2 className="text-lg font-serif font-bold text-gray-800 line-clamp-1 group-hover:text-blue-600 transition-colors">
+            {item.perfume}
+          </h2>
         </div>
       </div>
 
-      {/* FOOTER CARD */}
-      <div className="mt-6 border-t border-gray-50 pt-4">
-        <div className="flex items-center justify-between mb-4">
-          {/* PRICE */}
+      {/* METADATA ATRIBUT (Dibuat Grid Padat) */}
+      <div className="mt-2 pt-2 border-t border-gray-50 text-[11px] flex flex-col gap-1.5 flex-1">
+        
+        {/* Accord (Diberi ruang 2 baris kebawah agar teks panjang terlihat utuh) */}
+        <div className="bg-gray-50/50 p-1.5 rounded-md">
+          <span className="block text-[9px] text-gray-400 uppercase font-bold tracking-tight">Accord</span>
+          <span className="text-gray-700 font-medium line-clamp-2 break-words leading-tight">
+            {item.Accord || "-"}
+          </span>
+        </div>
+
+        {/* Atribut Side-by-Side */}
+        <div className="grid grid-cols-2 gap-1.5">
+          <div className="bg-gray-50/50 p-1.5 rounded-md">
+            <span className="block text-[9px] text-gray-400 uppercase font-bold tracking-tight">Mood</span>
+            <span className="text-gray-700 font-medium line-clamp-1">{item.Mood || "-"}</span>
+          </div>
+          <div className="bg-gray-50/50 p-1.5 rounded-md">
+            <span className="block text-[9px] text-gray-400 uppercase font-bold tracking-tight">Gender</span>
+            <span className="text-gray-700 font-medium capitalize line-clamp-1">{item.gender || "-"}</span>
+          </div>
+          <div className="bg-gray-50/50 p-1.5 rounded-md">
+            <span className="block text-[9px] text-gray-400 uppercase font-bold tracking-tight">Situation</span>
+            <span className="text-gray-700 font-medium line-clamp-1">{item.situation || "-"}</span>
+          </div>
+          <div className="bg-gray-50/50 p-1.5 rounded-md">
+            <span className="block text-[9px] text-gray-400 uppercase font-bold tracking-tight">Occasion</span>
+            <span className="text-gray-700 font-medium line-clamp-1">{item.Occasion || "-"}</span>
+          </div>
+        </div>
+
+        {/* Fragrance Notes (DIPERBAIKI: Menggunakan break-words dan whitespace-normal agar otomatis buat baris baru) */}
+        <div className="border border-dashed border-gray-200 p-1.5 rounded-md text-[10px]">
+          <span className="block text-[9px] text-gray-400 uppercase font-bold tracking-tight mb-0.5">Notes (T/M/B)</span>
+          <p className="text-gray-600 font-medium break-words whitespace-normal leading-relaxed">
+            <span className="text-gray-900 font-semibold">T:</span> {item.top_notes || item.top || "-"} •{" "}
+            <span className="text-gray-900 font-semibold">M:</span> {item.mid_notes || item.middle || "-"} •{" "}
+            <span className="text-gray-900 font-semibold">B:</span> {item.base_notes || item.base || "-"}
+          </p>
+        </div>
+
+        {/* EVALUASI DROPDOWN */}
+        {!canModify && (
+          <div className="mt-1 pt-1.5 border-t border-gray-100">
+            <label className="block text-[9px] text-blue-600 uppercase font-bold tracking-tight mb-1">
+              Ksesuaian Rekomendasi (NDCG)
+            </label>
+            <select
+              value={rating}
+              onChange={handleRatingChange}
+              className="w-full bg-blue-50/40 border border-blue-100 rounded-lg p-1.5 text-[11px] text-gray-700 font-medium focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
+            >
+              <option value="">-- Pilih Kesesuaian --</option>
+              <option value="0">Sangat Tidak Sesuai (0)</option>
+              <option value="1">Tidak Sesuai (1)</option>
+              <option value="2">Netral (2)</option>
+              <option value="3">Sesuai (3)</option>
+              <option value="4">Sangat Sesuai (4)</option>
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* FOOTER: HARGA & TOMBOL AKSI */}
+      <div className="mt-3 pt-2 border-t border-gray-100 flex flex-col gap-2">
+        <div className="flex items-center justify-between">
           <div>
-            <span className="text-[10px] block text-gray-400 uppercase font-bold">
-              Price
-            </span>
-            <p className="text-lg font-bold text-gray-900">
-              {formatRupiah(item.price)}
-            </p>
+            <span className="text-[9px] block text-gray-400 uppercase font-bold">Harga</span>
+            <p className="text-base font-bold text-gray-900">{formatRupiah(item.price)}</p>
           </div>
 
-          {/* BUTTON WISHLIST / LIKE */}
+          {/* WISHLIST BUTTON */}
           {!canModify && (
             <button
               onClick={() => handleAddToWishlist(item)}
-              className={`p-2.5 rounded-xl border transition-all duration-300 active:scale-90 ${
+              className={`p-2 rounded-lg border transition-all active:scale-90 ${
                 liked
-                  ? "bg-red-50 text-red-500 border-red-200"
-                  : "bg-gray-50 text-gray-400 border-gray-100 hover:text-red-500 hover:bg-red-50"
+                  ? "bg-red-50 text-red-500 border-red-100"
+                  : "bg-gray-50 text-gray-400 border-gray-100 hover:text-red-500"
               }`}
-              title="Tambah ke Wishlist"
             >
-              <Heart size={24} fill={liked ? "currentColor" : "none"} />
+              <Heart size={16} fill={liked ? "currentColor" : "none"} />
             </button>
           )}
         </div>
 
-        {/* BUTTON ACTION */}
+        {/* TOMBOL UTAMA */}
         {canModify ? (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-1.5">
             <button
-              className="w-full flex gap-2 justify-center items-center bg-blue-600 hover:bg-blue-800 transition-all duration-75 font-bold capitalize text-white text-sm py-3 rounded-md"
+              className="flex gap-1 justify-center items-center bg-blue-600 hover:bg-blue-700 font-semibold text-white text-xs py-2 rounded"
               onClick={() => onEdit(item)}
             >
-              <Edit width={20} /> edit
+              <Edit width={14} /> Edit
             </button>
-
             <button
-              className="w-full flex gap-2 justify-center items-center bg-red-600 hover:bg-red-800 font-bold capitalize text-white text-sm py-3 rounded-md"
+              className="flex gap-1 justify-center items-center bg-red-600 hover:bg-red-700 font-semibold text-white text-xs py-2 rounded"
               onClick={() => onDelete(item.id)}
             >
-              <Trash width={20} /> delete
+              <Trash width={14} /> Delete
             </button>
           </div>
         ) : (
           !hideDetailButton && (
             <Link
               to={`/parfum/${item.id}`}
-              className="block w-full bg-black text-white text-center py-3 rounded-md text-sm font-bold hover:text-white transition-all active:scale-95 shadow-lg shadow-black/10"
+              className="block w-full bg-black text-white text-center py-2 rounded text-xs font-semibold hover:bg-gray-800 transition-colors shadow-sm"
             >
               Lihat Detail
             </Link>
