@@ -78,6 +78,21 @@ class RecommendationService:
 
         # Hitung Similarity
         similarity = cosine_similarity(user_vector, self.final_matrix).flatten()
+        
+        # ====================================================================
+        # MODIFIKASI LOGIKA: PENYARINGAN ANCHOR ITEM (PREFERENSI ASAL)
+        # ====================================================================
+        anchor_id = preferences.get('selected_id')
+        
+        if anchor_id is not None:
+            # Cari index baris data yang memiliki id == anchor_id
+            exclude_indices = self.df[self.df['id'] == int(anchor_id)].index
+            if not exclude_indices.empty:
+                # Berikan nilai kemiripan paling rendah (-1.0) khusus untuk parfum asal ini
+                similarity[exclude_indices] = -1.0
+        # ====================================================================
+
+        # Urutkan index dari similarity terbesar ke terkecil
         top_indices = similarity.argsort()[::-1][:top_n]
 
         results = self.df.iloc[top_indices].copy()
