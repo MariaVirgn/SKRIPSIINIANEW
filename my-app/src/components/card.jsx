@@ -21,17 +21,16 @@ export default function PerfumeCard({
   // STATE LIKE & RATING
   // =========================
   const [liked, setLiked] = useState(false);
-  const [rating, setRating] = useState("");
+  const [rating, setRating] = useState("0"); 
 
+  // Sinkronisasi rating jika item menerima data user_rating
   useEffect(() => {
-    if (item?.user_rating) {
-      setRating(item.user_rating);
+    if (item?.user_rating !== undefined && item?.user_rating !== null) {
+      setRating(String(item.user_rating));
     }
   }, [item]);
 
-  // =========================
-  // CEK WISHLIST
-  // =========================
+  // Cek Status Wishlist saat load
   useEffect(() => {
     const checkWishlist = async () => {
       try {
@@ -50,7 +49,7 @@ export default function PerfumeCard({
           setLiked(isLiked);
         }
       } catch (err) {
-        console.log(err);
+        console.error("Gagal mengecek wishlist:", err);
       }
     };
 
@@ -60,13 +59,13 @@ export default function PerfumeCard({
   }, [item, canModify]);
 
   // =========================
-  // HANDLE UPDATE RATING
+  // HANDLE UPDATE RATING (EVALUASI)
   // =========================
   const handleRatingChange = async (e) => {
     const selectedValue = e.target.value;
     setRating(selectedValue);
 
-    if (!selectedValue) return;
+    if (selectedValue === "0" || !selectedValue) return;
 
     try {
       const token = localStorage.getItem("token");
@@ -77,7 +76,7 @@ export default function PerfumeCard({
           text: "Silakan login untuk memberikan penilaian relevansi.",
           confirmButtonColor: "#111827",
         });
-        setRating("");
+        setRating("0");
         return;
       }
 
@@ -90,8 +89,7 @@ export default function PerfumeCard({
         body: JSON.stringify({
           perfume_id: item.id,
           anchor_id: anchor_id, 
-          rating_text: selectedValue,
-          rating_score: Number(selectedValue)
+          rating_score: Number(selectedValue), 
         }),
       });
 
@@ -105,11 +103,11 @@ export default function PerfumeCard({
       
       Toast.fire({
         icon: 'success',
-        title: 'Penilaian disimpan, NDCG diperbarui!'
+        title: 'Penilaian disimpan untuk evaluasi!'
       });
 
     } catch (err) {
-      console.log(err);
+      console.error(err);
       Swal.fire({
         icon: "error",
         title: "Gagal",
@@ -191,7 +189,7 @@ export default function PerfumeCard({
       });
 
     } catch (err) {
-      console.log(err);
+      console.error(err);
     }
   };
 
@@ -212,7 +210,6 @@ export default function PerfumeCard({
         item.similarity ? "w-[340px]" : "w-full"
       }`}
     >
-      {/* TINGKAT MATCH */}
       {item?.similarity && (
         <div className="absolute top-3 right-3 z-10">
           <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
@@ -221,40 +218,29 @@ export default function PerfumeCard({
         </div>
       )}
 
-      {/* HEADER: GAMBAR & IDENTITAS */}
       <div className="flex flex-col gap-2">
-        {/* GAMBAR */}
         <div className="relative overflow-hidden rounded-lg bg-gray-50">
           <img
-            src={`http://localhost:5000/api/uploads/${item.image_file}`}
-            alt=""
+            src={`http://localhost:5000/api/uploads/${item.image_file || item.image || 'default.jpg'}`}
+            alt={item.perfume}
             className="object-cover object-center h-[200px] w-full group-hover:scale-105 transition-transform duration-300"
           />
         </div>
 
-        {/* BRAND & NAMA */}
         <div>
-          <p className="text-[9px] uppercase tracking-wider text-gray-400 font-bold">
-            {item.brand}
-          </p>
+          <p className="text-[9px] uppercase tracking-wider text-gray-400 font-bold">{item.brand}</p>
           <h2 className="text-lg font-serif font-bold text-gray-800 line-clamp-1 group-hover:text-blue-600 transition-colors">
             {item.perfume}
           </h2>
         </div>
       </div>
 
-      {/* METADATA ATRIBUT (Dibuat Grid Padat) */}
       <div className="mt-2 pt-2 border-t border-gray-50 text-[11px] flex flex-col gap-1.5 flex-1">
-        
-        {/* Accord (Diberi ruang 2 baris kebawah agar teks panjang terlihat utuh) */}
         <div className="bg-gray-50/50 p-1.5 rounded-md">
           <span className="block text-[9px] text-gray-400 uppercase font-bold tracking-tight">Accord</span>
-          <span className="text-gray-700 font-medium line-clamp-2 break-words leading-tight">
-            {item.Accord || "-"}
-          </span>
+          <span className="text-gray-700 font-medium line-clamp-2 break-words leading-tight">{item.Accord || "-"}</span>
         </div>
 
-        {/* Atribut Side-by-Side */}
         <div className="grid grid-cols-2 gap-1.5">
           <div className="bg-gray-50/50 p-1.5 rounded-md">
             <span className="block text-[9px] text-gray-400 uppercase font-bold tracking-tight">Mood</span>
@@ -272,41 +258,41 @@ export default function PerfumeCard({
             <span className="block text-[9px] text-gray-400 uppercase font-bold tracking-tight">Occasion</span>
             <span className="text-gray-700 font-medium line-clamp-1">{item.Occasion || "-"}</span>
           </div>
+          <div className="bg-gray-50/50 p-1.5 rounded-md">
+            <span className="block text-[9px] text-gray-400 uppercase font-bold tracking-tight">Top Notes</span>
+            <span className="text-gray-700 font-medium line-clamp-1">{item.top_notes || "-"}</span>
+          </div>
+          <div className="bg-gray-50/50 p-1.5 rounded-md">
+            <span className="block text-[9px] text-gray-400 uppercase font-bold tracking-tight">Mid Notes</span>
+            <span className="text-gray-700 font-medium line-clamp-1">{item.mid_notes || "-"}</span>
+          </div>
+          <div className="bg-gray-50/50 p-1.5 rounded-md col-span-2">
+            <span className="block text-[9px] text-gray-400 uppercase font-bold tracking-tight">Base Notes</span>
+            <span className="text-gray-700 font-medium line-clamp-1">{item.base_notes || "-"}</span>
+          </div>
         </div>
 
-        {/* Fragrance Notes (DIPERBAIKI: Menggunakan break-words dan whitespace-normal agar otomatis buat baris baru) */}
-        <div className="border border-dashed border-gray-200 p-1.5 rounded-md text-[10px]">
-          <span className="block text-[9px] text-gray-400 uppercase font-bold tracking-tight mb-0.5">Notes (T/M/B)</span>
-          <p className="text-gray-600 font-medium break-words whitespace-normal leading-relaxed">
-            <span className="text-gray-900 font-semibold">T:</span> {item.top_notes || item.top || "-"} •{" "}
-            <span className="text-gray-900 font-semibold">M:</span> {item.mid_notes || item.middle || "-"} •{" "}
-            <span className="text-gray-900 font-semibold">B:</span> {item.base_notes || item.base || "-"}
-          </p>
-        </div>
-
-        {/* EVALUASI DROPDOWN */}
         {!canModify && (
           <div className="mt-1 pt-1.5 border-t border-gray-100">
-            <label className="block text-[9px] text-blue-600 uppercase font-bold tracking-tight mb-1">
-              Ksesuaian Rekomendasi (NDCG)
+            <label className="block text-[9px] uppercase font-bold tracking-tight mb-1 text-indigo-600">
+              Kesesuaian Rekomendasi (NDCG)
             </label>
             <select
               value={rating}
               onChange={handleRatingChange}
-              className="w-full bg-blue-50/40 border border-blue-100 rounded-lg p-1.5 text-[11px] text-gray-700 font-medium focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
+              className="w-full border rounded-lg p-1.5 text-[11px] font-medium focus:outline-none focus:ring-1 focus:ring-indigo-400 transition-all bg-indigo-50/40 border-indigo-100 text-gray-700 cursor-pointer"
             >
-              <option value="">-- Pilih Kesesuaian --</option>
-              <option value="0">Sangat Tidak Sesuai (0)</option>
-              <option value="1">Tidak Sesuai (1)</option>
-              <option value="2">Netral (2)</option>
-              <option value="3">Sesuai (3)</option>
-              <option value="4">Sangat Sesuai (4)</option>
+              <option value="0">-- Pilih Kesesuaian --</option>
+              <option value="1">Sangat Tidak Sesuai (1)</option>
+              <option value="2">Tidak Sesuai (2)</option>
+              <option value="3">Cukup Sesuai (3)</option>
+              <option value="4">Sesuai (4)</option>
+              <option value="5">Sangat Sesuai (5)</option>
             </select>
           </div>
         )}
       </div>
 
-      {/* FOOTER: HARGA & TOMBOL AKSI */}
       <div className="mt-3 pt-2 border-t border-gray-100 flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <div>
@@ -314,14 +300,11 @@ export default function PerfumeCard({
             <p className="text-base font-bold text-gray-900">{formatRupiah(item.price)}</p>
           </div>
 
-          {/* WISHLIST BUTTON */}
           {!canModify && (
             <button
               onClick={() => handleAddToWishlist(item)}
               className={`p-2 rounded-lg border transition-all active:scale-90 ${
-                liked
-                  ? "bg-red-50 text-red-500 border-red-100"
-                  : "bg-gray-50 text-gray-400 border-gray-100 hover:text-red-500"
+                liked ? "bg-red-50 text-red-500 border-red-100" : "bg-gray-50 text-gray-400 border-gray-100 hover:text-red-500"
               }`}
             >
               <Heart size={16} fill={liked ? "currentColor" : "none"} />
@@ -329,28 +312,18 @@ export default function PerfumeCard({
           )}
         </div>
 
-        {/* TOMBOL UTAMA */}
         {canModify ? (
           <div className="grid grid-cols-2 gap-1.5">
-            <button
-              className="flex gap-1 justify-center items-center bg-blue-600 hover:bg-blue-700 font-semibold text-white text-xs py-2 rounded"
-              onClick={() => onEdit(item)}
-            >
+            <button className="flex gap-1 justify-center items-center bg-blue-600 hover:bg-blue-700 font-semibold text-white text-xs py-2 rounded" onClick={() => onEdit(item)}>
               <Edit width={14} /> Edit
             </button>
-            <button
-              className="flex gap-1 justify-center items-center bg-red-600 hover:bg-red-700 font-semibold text-white text-xs py-2 rounded"
-              onClick={() => onDelete(item.id)}
-            >
+            <button className="flex gap-1 justify-center items-center bg-red-600 hover:bg-red-700 font-semibold text-white text-xs py-2 rounded" onClick={() => onDelete(item.id)}>
               <Trash width={14} /> Delete
             </button>
           </div>
         ) : (
           !hideDetailButton && (
-            <Link
-              to={`/parfum/${item.id}`}
-              className="block w-full bg-black text-white text-center py-2 rounded text-xs font-semibold hover:bg-gray-800 transition-colors shadow-sm"
-            >
+            <Link to={`/parfum/${item.id}`} className="block w-full bg-black text-white text-center py-2 rounded text-xs font-semibold hover:bg-gray-800 transition-colors shadow-sm">
               Lihat Detail
             </Link>
           )

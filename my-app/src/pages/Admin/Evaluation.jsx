@@ -18,48 +18,37 @@ function AdminEvaluation() {
       try {
         setLoading(true);
 
-        // GET PERFUME NAMES
+        // 1. Ambil data nama parfum untuk mapping ID -> Nama
         const perfumes = await apiFetch("/api/admin/perfumes").catch(() => []);
-
         const names = {};
-        perfumes?.forEach((p) => {
-          names[p.id] = p.perfume;
-        });
-
+        if (Array.isArray(perfumes)) {
+          perfumes.forEach((p) => {
+            names[p.id] = p.perfume;
+          });
+        }
         setPerfumeNames(names);
 
-        // GET EVALUATION (Backend sekarang menghitung NDCG berdasarkan rating skala 0-4)
+        // 2. Ambil data hasil evaluasi dari backend
         const result = await apiFetch("/api/admin/evaluation");
-
         const evaluationDetails = result?.details || [];
         setDetails(evaluationDetails);
 
-        // VALID DATA
+        // 3. Hitung Metrik Summary dengan pengecekan data
         const validDetails = evaluationDetails.filter(
-          (d) => d?.ap !== null && d?.ndcg !== null
+          (d) => d && typeof d.ndcg === 'number'
         );
 
-        // MEAN AVERAGE PRECISION (MAP)
-        const map =
-          validDetails.length > 0
-            ? validDetails.reduce((sum, d) => sum + Number(d.ap), 0) /
-              validDetails.length
-            : 0;
+        const total = validDetails.length;
+        const map = total > 0 
+          ? validDetails.reduce((sum, d) => sum + Number(d.ap || 0), 0) / total 
+          : 0;
+        const mean_ndcg = total > 0 
+          ? validDetails.reduce((sum, d) => sum + Number(d.ndcg || 0), 0) / total 
+          : 0;
 
-        // MEAN NDCG (Sekarang merefleksikan grading ideal kumulatif dari rating user)
-        const mean_ndcg =
-          validDetails.length > 0
-            ? validDetails.reduce((sum, d) => sum + Number(d.ndcg), 0) /
-              validDetails.length
-            : 0;
-
-        setSummary({
-          map,
-          mean_ndcg,
-          total_users: validDetails.length,
-        });
+        setSummary({ map, mean_ndcg, total_users: total });
       } catch (err) {
-        setError(err.message || "Failed to load evaluation data");
+        setError("Gagal memuat data evaluasi. Pastikan server backend berjalan.");
       } finally {
         setLoading(false);
       }
@@ -68,200 +57,111 @@ function AdminEvaluation() {
     fetchData();
   }, []);
 
-  // Helper untuk mengubah nilai score (0-4) menjadi teks label badge
   const getRatingBadge = (score) => {
-    const numScore = Number(score);
-    switch (numScore) {
-      case 4:
-        return { text: "Sangat Sesuai", class: "bg-emerald-50 text-emerald-700 border-emerald-200" };
-      case 3:
-        return { text: "Sesuai", class: "bg-blue-50 text-blue-700 border-blue-200" };
-      case 2:
-        return { text: "Netral", class: "bg-slate-100 text-slate-700 border-slate-200" };
-      case 1:
-        return { text: "Tidak Sesuai", class: "bg-orange-50 text-orange-700 border-orange-200" };
-      case 0:
-        return { text: "Sangat Tidak Sesuai", class: "bg-red-50 text-red-700 border-red-200" };
-      default:
-        return { text: "Belum Dinilai", class: "bg-gray-50 text-gray-400 border-gray-100" };
-    }
+    const numScore = Math.round(Number(score));
+    const badges = {
+      5: { text: "Sangat Sesuai (5)", class: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+      4: { text: "Sesuai (4)", class: "bg-blue-100 text-blue-800 border-blue-200" },
+      3: { text: "Cukup Sesuai (3)", class: "bg-amber-100 text-amber-800 border-amber-200" },
+      2: { text: "Tidak Sesuai (2)", class: "bg-orange-100 text-orange-800 border-orange-200" },
+      1: { text: "Sangat Tidak Sesuai (1)", class: "bg-red-100 text-red-800 border-red-200" },
+    };
+    return badges[numScore] || { text: "Belum Dinilai (0)", class: "bg-gray-100 text-gray-600 border-gray-200" };
   };
 
-  if (loading) {
-    return (
-      <div className="p-20 text-center font-bold text-slate-400 animate-pulse">
-        LOADING DASHBOARD...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-10 text-center text-red-500 font-semibold">
-        {error}
-      </div>
-    );
-  }
+  if (loading) return <div className="p-20 text-center font-bold text-slate-400 animate-pulse">MEMUAT DATA EVALUASI...</div>;
+  
+  if (error) return (
+    <div className="p-10 text-center text-red-500 font-semibold bg-red-50 m-10 rounded-2xl border border-red-200">
+      {error}
+    </div>
+  );
 
   return (
-    <main className="p-6 col-span-4 w-full h-screen overflow-y-auto bg-slate-50">
-
-      {/* HEADER */}
+    <main className="p-8 col-span-4 w-full h-screen overflow-y-auto bg-slate-50">
       <div className="mb-8">
-        <h1 className="text-4xl font-black text-slate-900 tracking-tight">
-          Algoritma Evaluation
-        </h1>
-
-        <p className="text-slate-500 mt-2 text-lg font-medium">
-          Dashboard Analisis MAP & Mean NDCG berdasarkan tingkat kesesuaian rekomendasi oleh user.
-        </p>
+        <h1 className="text-4xl font-black text-slate-900">Algoritma Evaluation</h1>
+        <p className="text-slate-500 mt-2">Dashboard analisis performa sistem rekomendasi berdasarkan umpan balik pengguna.</p>
       </div>
 
-      {/* SUMMARY CARDS */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-
-        {/* MAP */}
         <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400 mb-4">
-            Mean Average Precision (MAP)
-          </p>
-
-          <h2 className="text-5xl font-black text-slate-900 tracking-tight mb-3">
-            {summary.map.toFixed(4)}
-          </h2>
-
-          <p className="text-sm text-slate-400 italic">
-            Berdasarkan {summary.total_users} user valid.
-          </p>
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Mean Average Precision (MAP)</p>
+          <h2 className="text-5xl font-black text-slate-900">{summary.map.toFixed(3)}</h2>
         </div>
-
-        {/* NDCG */}
         <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400 mb-4">
-            Mean NDCG @7 (Skala Multi-level)
-          </p>
-
-          <h2 className="text-5xl font-black text-slate-900 tracking-tight mb-3">
-            {summary.mean_ndcg.toFixed(4)}
-          </h2>
-
-          <p className="text-sm text-slate-400 italic">
-            Rata-rata akurasi peringkat berdasarkan bobot pilihan kesesuaian user.
-          </p>
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Mean NDCG</p>
+          <h2 className="text-5xl font-black text-indigo-600">{summary.mean_ndcg.toFixed(3)}</h2>
         </div>
       </div>
 
-      {/* TABLE DATA */}
+      {/* Table Detail */}
       <section className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-
-        {/* TABLE HEADER */}
-        <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-slate-800">
-            Detail Evaluasi Per User
-          </h2>
-
-          <span className="bg-indigo-50 text-indigo-600 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
-            Live Metrics
-          </span>
+        <div className="px-8 py-6 border-b border-slate-100">
+          <h2 className="font-bold text-lg text-slate-800">Detail Evaluasi Per User</h2>
         </div>
-
-        {/* TABLE BODY */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1000px]">
-
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-8 py-4 text-xs font-bold uppercase text-slate-400 tracking-widest">
-                  User
-                </th>
-
-                <th className="px-8 py-4 text-xs font-bold uppercase text-slate-400 tracking-widest">
-                  Rekomendasi & Respons Tingkat Kesesuaian
-                </th>
-
-                <th className="px-8 py-4 text-xs font-bold uppercase text-slate-400 tracking-widest text-center">
-                  AP
-                </th>
-
-                <th className="px-8 py-4 text-xs font-bold uppercase text-slate-400 tracking-widest text-center">
-                  NDCG
-                </th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-slate-100">
-              {details.map((row, index) => (
-                <tr
-                  key={index}
-                  className="hover:bg-slate-50 transition-colors"
-                >
-
-                  {/* USER */}
-                  <td className="px-8 py-6 align-top">
-                    <span className="font-black text-lg text-slate-900 block">
-                      {row.user_name}
-                    </span>
-                  </td>
-
-                  {/* WISHLIST & DROPDOWN RATING REFLECTION */}
-                  <td className="px-8 py-6">
-
-                    {/* JUMLAH DATA YANG DINILAI */}
-                    <div className="mb-3">
-                      <span className="bg-slate-100 text-slate-700 text-xs font-bold px-3 py-1 rounded-full">
-                        {row?.ratings?.length || row?.valid_ids?.length || 0} Item Dinilai
-                      </span>
-                    </div>
-
-                    {/* LIST PARFUM DENGAN INDIKATOR SKALA KESESUAIAN */}
-                    <div className="flex flex-col gap-2 max-w-2xl">
-                      {(row?.ratings || row?.valid_ids || []).map((itemData, idx) => {
-                        // Mengakomodasi jika backend mengirim struktur array object ataupun array ID biasa
-                        const isObject = typeof itemData === 'object';
-                        const perfumeId = isObject ? itemData.perfume_id : itemData;
-                        const score = isObject ? itemData.rating_score : row.scores?.[idx]; 
-                        
-                        const badgeStyle = getRatingBadge(score);
-
-                        return (
-                          <div 
-                            key={idx} 
-                            className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 gap-4"
-                          >
-                            <span className="text-xs font-bold text-slate-700 truncate">
-                              {perfumeNames[perfumeId] || `ID ${perfumeId}`}
-                            </span>
-                            
-                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border shadow-sm ${badgeStyle.class}`}>
-                              {badgeStyle.text}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                  </td>
-
-                  {/* SCORE AP */}
-                  <td className="px-8 py-6 text-center align-top">
-                    <span className="text-base font-bold text-slate-700 block mt-1">
-                      {Number(row.ap || 0).toFixed(3)}
-                    </span>
-                  </td>
-
-                  {/* SCORE NDCG */}
-                  <td className="px-8 py-6 text-center align-top">
-                    <span className="text-base font-bold text-indigo-600 block mt-1">
-                      {Number(row.ndcg || 0).toFixed(3)}
-                    </span>
-                  </td>
-
+        
+        {details.length === 0 ? (
+          <div className="p-20 text-center text-slate-400 italic">Belum ada data evaluasi yang tersedia.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[1000px]">
+              <thead className="bg-slate-50 text-slate-400 uppercase text-[10px] font-bold tracking-wider">
+                <tr>
+                  <th className="px-8 py-4">USER</th>
+                  <th className="px-8 py-4">ANCHOR ITEM</th>
+                  <th className="px-8 py-4">HASIL REKOMENDASI (SKOR)</th>
+                  <th className="px-8 py-4 text-center">AP</th>
+                  <th className="px-8 py-4 text-center">NDCG</th>
                 </tr>
-              ))}
-            </tbody>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {details.map((row, index) => (
+                  <tr key={index} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-8 py-6 font-bold text-slate-900">{row.user_name}</td>
+                    <td className="px-8 py-6 text-sm text-slate-500 italic">
+                      {perfumeNames[row.anchor_id] || `ID: ${row.anchor_id}`}
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex flex-wrap gap-2 max-w-lg">
+                        {(row.recommended_ids || []).map((pId, idx) => {
+                          // 1. Pastikan kita mengakses skor dengan index yang tepat
+                          const score = row.relevansi_scores && row.relevansi_scores[idx] !== undefined
+                            ? row.relevansi_scores[idx]
+                            : 0;
 
-          </table>
-        </div>
+                          // 2. Pastikan kita memiliki nama parfum dari state perfumeNames
+                          const perfumeLabel = perfumeNames[pId] || `ID: ${pId}`;
+
+                          if (score === 0) {
+                            return (
+                              <div key={`${row.user_name}-${pId}-${idx}`} className="bg-gray-100 text-gray-400 border-gray-200 px-3 py-1 rounded-full border text-[10px] font-medium">
+                                {perfumeLabel} (Belum Dinilai)
+                              </div>
+                            );
+                          }
+
+                          const badge = getRatingBadge(score);
+                          return (
+                            <div key={`${row.user_name}-${pId}-${idx}`} className={`flex items-center gap-2 px-3 py-1 rounded-full border ${badge.class}`}>
+                              <span className="text-xs font-semibold truncate max-w-[120px]">
+                                {perfumeLabel}
+                              </span>
+                              <span className="text-[9px] font-bold">{score}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </td>
+                    <td className="px-8 py-6 text-center font-bold text-slate-700">{Number(row.ap || 0).toFixed(3)}</td>
+                    <td className="px-8 py-6 text-center font-bold text-indigo-600">{Number(row.ndcg || 0).toFixed(3)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </main>
   );

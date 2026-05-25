@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from models.user_model import User
 from models.wishlist_model import Wishlist
 from models.perfume_model import Perfume
+from models.rating_model import Rating
 # PENTING: Import RecommendationEvaluator ditambahkan di sini
 from services.recommendation_service import RecommendationService
 from services.recommendation_evaluator import RecommendationEvaluator
@@ -146,6 +147,7 @@ def delete_user(id):
         return jsonify({"message":"User doesn't exist"}), 404
     
     Wishlist.query.filter_by(user_id = id).delete()
+    Rating.query.filter_by(user_id=id).delete()
     
     db.session.delete(user)
     db.session.commit()
@@ -173,35 +175,32 @@ def get_evaluation():
     try:
         users = User.query.all()
         details = []
-        
-        # Panggil Evaluator buatan teman Anda
         evaluator = RecommendationEvaluator()
         
         for user in users:
-            # 1. Ambil Ground Truth (Daftar ID yang ada di wishlist user)
-            valid_ids = evaluator.get_user_wishlist(user.id)
+            user_ratings = evaluator.get_user_ratings(user.id)
+            if not user_ratings: continue
+                
+            recommended_ids, anchor_id = evaluator.get_system_recommendations(user.id, top_n=7)
             
-            if len(valid_ids) > 0:
-                # 2. Minta sistem untuk memprediksi rekomendasi (Top 7)
-                recommended_ids = evaluator.get_system_recommendations(user.id, top_n=7)
-                
-                # 3. Hitung metrik AP dan NDCG menggunakan fungsi asli teman Anda
-                ap, ndcg, relevansi = evaluator.calculate_metrics(recommended_ids, valid_ids)
-                
-                # Mengambil nama user
-                user_name_display = getattr(user, 'username', getattr(user, 'name', f"User {user.id}"))
-                
-                details.append({
-                    "user_name": user_name_display, 
-                    "valid_ids": valid_ids,
-                    "ap": ap,
-                    "ndcg": ndcg
-                })
-                
-        return jsonify({
-            "details": details
-        }), 200
+            # KUNCI: Hitung metrik dan pastikan score sejajar dengan recommended_ids
+            ap, ndcg, relevansi_scores = evaluator.calculate_metrics_multilevel(recommended_ids, user_ratings)
+            
+            # Memastikan jika panjang list tidak sama, kita ambil yang terpendek agar tidak index out of range
+            min_len = min(len(recommended_ids), len(relevansi_scores))
+            
+            details.append({
+                "user_name": getattr(user, 'name', f"User {user.id}"),
+                "anchor_id": anchor_id,
+                "ap": float(ap),
+                "ndcg": float(ndcg),
+                # Kita kirim data yang sudah di-trim sesuai panjang yang sama
+                "recommended_ids": recommended_ids[:min_len],
+                "relevansi_scores": relevansi_scores[:min_len]
+            })
+            
+        return jsonify({"details": details}), 200
         
     except Exception as e:
-        print("Error Evaluasi:", str(e))
-        return jsonify({"error": str(e)}), 500
+        print(f"Error: {str(e)}")
+        return jsonify({"error": "Terjadi kesalahan internal"}), 500

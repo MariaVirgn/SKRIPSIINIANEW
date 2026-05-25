@@ -1,37 +1,48 @@
 from flask import Blueprint, request, jsonify, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from sqlalchemy import func
+from database.db import db
+
+# Models
 from models.user_model import User
 from models.wishlist_model import Wishlist
+from models.rating_model import Rating 
 from models.perfume_model import Perfume
+
+# Services
 from services.recommendation_service import RecommendationService
-from sqlalchemy import func
 
-# Inisialisasi Blueprint
-api_bp = Blueprint('/api', __name__)
-
-# Inisialisasi service
+api_bp = Blueprint('api', __name__)
 service = RecommendationService()
 
-@api_bp.route("/recommend", methods=["POST"])
-@jwt_required()
-def recommend():
-    data = request.get_json()
-    result = service.recommend(data)
-    return jsonify(result)
-
+# =====================================================================
+# 1. AUTH & UTILITY ENDPOINTS
+# =====================================================================
 @api_bp.route("/profile", methods=["GET"])
 @jwt_required()
 def profile():
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
-    if not user:
-        return jsonify({"msg": "User not found"}), 404
-    return jsonify(user.to_dict())
+    return jsonify(user.to_dict()) if user else (jsonify({"msg": "User not found"}), 404)
 
 @api_bp.route("/dropdowns", methods=["GET"])
 def dropdowns():
     return jsonify(service.get_unique_values())
 
+# =====================================================================
+# 2. RECOMMENDATION ENDPOINTS
+# =====================================================================
+@api_bp.route("/recommend", methods=["POST"])
+@jwt_required()
+def recommend():
+    data = request.get_json()
+    # Pastikan service.recommend menangani data yang masuk
+    result = service.recommend(data)
+    return jsonify(result)
+
+# =====================================================================
+# 3. WISHLIST ENDPOINTS (Fitur User "Like")
+# =====================================================================
 @api_bp.route("/wishlist", methods=["GET"])
 @jwt_required()
 def get_wishlist():
@@ -39,54 +50,85 @@ def get_wishlist():
     items = Wishlist.query.filter_by(user_id=user_id).all()
     return jsonify([i.to_dict() for i in items])
 
+@api_bp.route("/wishlist/toggle", methods=["POST"])
+@jwt_required()
+def toggle_wishlist():
+    user_id = get_jwt_identity()
+    perfume_id = request.get_json().get("perfume_id")
+    
+    item = Wishlist.query.filter_by(user_id=user_id, perfume_id=perfume_id).first()
+    if item:
+        db.session.delete(item)
+        msg = "Removed from wishlist"
+    else:
+        db.session.add(Wishlist(user_id=user_id, perfume_id=perfume_id))
+        msg = "Added to wishlist"
+    
+    db.session.commit()
+    return jsonify({"msg": msg})
+
+# =====================================================================
+# 4. EVALUASI ENDPOINTS (Data Skripsi/Rating)
+# =====================================================================
+@api_bp.route("/evaluasi/rating", methods=["POST"])
+@jwt_required()
+def add_rating():
+    user_id = get_jwt_identity()
+    data = request.get_json()
+    perfume_id = data.get("perfume_id")
+    rating_score = data.get("rating_score")
+    anchor_id = data.get("anchor_id")
+
+    if not perfume_id or rating_score is None:
+        return jsonify({"msg": "Invalid data provided"}), 400
+
+    # Upsert rating: Update jika ada, Create jika baru
+    rating_item = Rating.query.filter_by(user_id=user_id, perfume_id=perfume_id).first()
+    
+    if rating_item:
+        rating_item.rating = rating_score
+        rating_item.anchor_id = anchor_id
+    else:
+        new_rating = Rating(user_id=user_id, perfume_id=perfume_id, anchor_id=anchor_id, rating=rating_score)
+        db.session.add(new_rating)
+
+    db.session.commit()
+    return jsonify({"msg": "Rating saved successfully"}), 200
+
+# =====================================================================
+# 5. PERFUME ENDPOINTS
+# =====================================================================
 @api_bp.route("/perfume", methods=["GET"])
 @jwt_required()
-def get_AllPerfumes():
-    # Ambil parameter query dari frontend
+def get_all_perfumes():
+    # Filter parameter
     page = request.args.get("page", 0, type=int)
-    accord = request.args.get("Accord", type=str)
-    gender = request.args.get("gender", type=str)
-    situation = request.args.get("situation", type=str)
-    occasion = request.args.get("Occasion", type=str)
-    price_range = request.args.get("price_range", type=str)
+    filters = {
+        "accord": request.args.get("Accord"),
+        "gender": request.args.get("gender"),
+        "situation": request.args.get("situation"),
+        "occasion": request.args.get("Occasion"),
+        "price_range": request.args.get("price_range")
+    }
 
     query = Perfume.query
+    if filters["accord"]: query = query.filter(Perfume.Accord.ilike(f"%{filters['accord']}%"))
+    if filters["gender"]: query = query.filter(func.lower(Perfume.gender) == filters["gender"].lower())
+    if filters["situation"]: query = query.filter(func.lower(Perfume.situation) == filters["situation"].lower())
+    if filters["occasion"]: query = query.filter(func.lower(Perfume.Occasion) == filters["occasion"].lower())
     
-    # --- FILTER KRITERIA (Memperhatikan Case Sensitive Atribut) ---
-    if accord:
-        query = query.filter(Perfume.Accord.ilike(f"%{accord}%"))
-    
-    if gender:
-        query = query.filter(func.lower(Perfume.gender) == gender.lower())
-    
-    if situation:
-        query = query.filter(func.lower(Perfume.situation) == situation.lower())
-    
-    if occasion:
-        query = query.filter(func.lower(Perfume.Occasion) == occasion.lower())
-    
-    # --- FILTER RENTANG HARGA ---
-    # Karena kolom Perfume.price adalah Integer, kita langsung bandingkan angkanya
-    if price_range:
-        pr = price_range.strip().lower()
-        if pr == "basic":
-            query = query.filter(Perfume.price <= 155000)
-        elif pr == "classic":
-            query = query.filter(Perfume.price > 155000, Perfume.price <= 210000)
-        elif pr == "premium":
-            query = query.filter(Perfume.price > 210000, Perfume.price <= 251100)
-        elif pr == "luxury":
-            query = query.filter(Perfume.price > 251100, Perfume.price <= 349000)
-        elif pr == "elite":
-            query = query.filter(Perfume.price > 349000)
+    # Logic Price Range
+    pr = filters["price_range"]
+    if pr:
+        ranges = {
+            "basic": (0, 155000), "classic": (155001, 210000), 
+            "premium": (210001, 251100), "luxury": (251101, 349000), "elite": (349001, 9999999)
+        }
+        if pr.lower() in ranges:
+            query = query.filter(Perfume.price.between(*ranges[pr.lower()]))
 
-    # --- SORTING & PAGINATION ---
-    # Urutkan berdasarkan harga termurah
-    query = query.order_by(Perfume.price.asc())
+    pagination = query.order_by(Perfume.price.asc()).paginate(page=page + 1, per_page=12, error_out=False)
     
-    # React kirim page 0, SQLAlchemy butuh page 1
-    pagination = query.paginate(page=page + 1, per_page=12, error_out=False)
-
     return jsonify({
         "data": [i.to_dict() for i in pagination.items],
         "total": pagination.total,
@@ -98,9 +140,7 @@ def get_AllPerfumes():
 @jwt_required()
 def get_perfume_by_id(id):
     perfume = Perfume.query.get(id)
-    if not perfume:
-        return jsonify({"msg": "Perfume not found"}), 404
-    return jsonify(perfume.to_dict())
+    return jsonify(perfume.to_dict()) if perfume else (jsonify({"msg": "Perfume not found"}), 404)
 
 @api_bp.route('/uploads/<filename>')
 def uploaded_file(filename):

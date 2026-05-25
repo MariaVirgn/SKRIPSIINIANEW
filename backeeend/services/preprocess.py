@@ -11,7 +11,7 @@ def preprocess_data(df):
     df['Accord'] = df['Accord'].str.replace('.', '', regex=False).str.replace(',', ' ', regex=False)
 
     # 3. Preprocessing Kategorikal
-    cat_cols = ['Occasion', 'situation', 'gender', 'concentrate','Range']
+    cat_cols = ['Occasion', 'situation', 'gender','Range']
     for col in cat_cols:
         df[col] = df[col].fillna('unknown').astype(str).str.lower().str.strip()
 
@@ -26,7 +26,6 @@ def preprocess_data(df):
         df['Occasion'] + ' ' + 
         df['situation'] + ' ' + 
         df['gender'] + ' ' + 
-        df['concentrate'] + ' ' + 
         df['Range']
     ).str.lower()
 
