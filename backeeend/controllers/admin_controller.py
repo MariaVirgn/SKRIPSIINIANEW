@@ -178,25 +178,28 @@ def get_evaluation():
         evaluator = RecommendationEvaluator()
         
         for user in users:
+            # Cek apakah user memiliki rating
             user_ratings = evaluator.get_user_ratings(user.id)
-            if not user_ratings: continue
-                
-            recommended_ids, anchor_id = evaluator.get_system_recommendations(user.id, top_n=7)
             
-            # KUNCI: Hitung metrik dan pastikan score sejajar dengan recommended_ids
-            ap, ndcg, relevansi_scores = evaluator.calculate_metrics_multilevel(recommended_ids, user_ratings)
+            # KUNCI: Skip jika user tidak punya rating
+            if not user_ratings:
+                continue
+
+            recommended_ids, anchor_id, relevansi_scores = evaluator.get_system_recommendations(user.id, top_n=7)
             
-            # Memastikan jika panjang list tidak sama, kita ambil yang terpendek agar tidak index out of range
-            min_len = min(len(recommended_ids), len(relevansi_scores))
+            # Skip jika tidak punya anchor
+            if not anchor_id: continue
+            
+            # 3. Hitung metrik menggunakan skor yang sudah sinkron
+            ap, ndcg = evaluator.calculate_metrics_multilevel(relevansi_scores)
             
             details.append({
                 "user_name": getattr(user, 'name', f"User {user.id}"),
                 "anchor_id": anchor_id,
                 "ap": float(ap),
                 "ndcg": float(ndcg),
-                # Kita kirim data yang sudah di-trim sesuai panjang yang sama
-                "recommended_ids": recommended_ids[:min_len],
-                "relevansi_scores": relevansi_scores[:min_len]
+                # Kirim data yang sudah berpasangan (id dan skor)
+                "items": [{"id": p_id, "score": score} for p_id, score in zip(recommended_ids, relevansi_scores)]
             })
             
         return jsonify({"details": details}), 200
